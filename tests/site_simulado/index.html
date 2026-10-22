@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>AVAPRO (simulado)</title>
+<style>
+  body { font-family: sans-serif; margin: 0; }
+  .main-sidebar { float: left; width: 180px; background: #eee; min-height: 100vh; }
+  .main-sidebar a { display: block; padding: 6px; }
+  #conteudo { margin-left: 190px; padding: 10px; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.3); }
+  .modal-content { background: #fff; margin: 60px auto; width: 600px; padding: 10px; }
+  .swal2-container { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 99; }
+  .swal2-popup { background: #fff; margin: 120px auto; width: 420px; padding: 16px; }
+  table { border-collapse: collapse; } td, th { border: 1px solid #ccc; padding: 4px; }
+  .small-box { display: inline-block; width: 200px; margin: 10px; background: #36c; color: #fff; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// Imita as telas da plataforma AVAPRO usadas pelo app (mesmos campos, botões e alertas).
+const CPF_LOGIN = '45645645600', SENHA = 'teste';
+const COLABORADORES = {'11144477735': 'Pedro Ja Cadastrado'};
+const ARQUIVADOS = {'39053344705': 'Rita Arquivada'};
+const AVAPRO = {'98765432100': 'Carlos Avapro Souza'};
+const ACOMPANHAMENTO = [
+  {id: 1, nome: 'JOÃO CARLOS SOARES NASCIMENTO', curso: 'NR 35 - Trabalho em Altura', status: 'Cursando', conclusao: 45},
+  {id: 2, nome: 'Gabriel Shalon', curso: 'NR 10 - Básico', status: 'Cursando', conclusao: 80},
+  {id: 3, nome: 'Gabriel Shalon', curso: 'NR 33 - Supervisor de Entrada', status: 'Concluído', conclusao: 100},
+  {id: 4, nome: 'Cleyton Antônio de Oliveira', curso: 'NR 12 - Máquinas', status: 'Não Iniciado', conclusao: null},
+];
+const HISTORICO = [
+  {id: 11, nome: 'Aline de Fátima Betti', curso: 'NR 06 - EPI', assinatura: true},
+  {id: 12, nome: 'Gabriel Shalon', curso: 'NR 33 - Supervisor de Entrada', assinatura: false},
+];
+const app = document.getElementById('app');
+const norm = t => (t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const espera = ms => new Promise(r => setTimeout(r, ms));
+const logado = () => localStorage.getItem('logado') === '1';
+const salvos = () => JSON.parse(localStorage.getItem('salvos') || '{}');
+
+function cpfValido(c) {
+  c = c.replace(/\D/g, '');
+  if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
+  for (const t of [9, 10]) {
+    let s = 0; for (let i = 0; i < t; i++) s += +c[i] * (t + 1 - i);
+    if ((s * 10) % 11 % 10 !== +c[t]) return false;
+  }
+  return true;
+}
+function mascara(v) {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+}
+function carregando(sim) {
+  let s = document.querySelector('.spinner-avapro');
+  if (sim && !s) { s = document.createElement('img'); s.className = 'spinner-avapro'; s.alt = 'Loading';
+    s.style.cssText = 'width:40px;height:40px;display:block;background:#999'; document.body.appendChild(s); }
+  if (!sim && s) s.remove();
+}
+function swal({title, html, confirm = 'OK', cancel = null}) {
+  return new Promise(resolve => {
+    const c = document.createElement('div');
+    c.className = 'swal2-container';
+    c.innerHTML = `<div class="swal2-popup swal2-show"><h2 class="swal2-title">${title}</h2>
+      <div class="swal2-html-container">${html}</div><div class="swal2-actions">
+      <button class="swal2-confirm">${confirm}</button>${cancel ? `<button class="swal2-cancel">${cancel}</button>` : ''}</div></div>`;
+    document.body.appendChild(c);
+    c.querySelector('.swal2-confirm').onclick = () => { c.remove(); resolve(true); };
+    const b = c.querySelector('.swal2-cancel'); if (b) b.onclick = () => { c.remove(); resolve(false); };
+  });
+}
+function ir(rota) { history.pushState({}, '', rota); render(); }
+window.onpopstate = render;
+
+function layout(html) {
+  app.innerHTML = `<aside class="main-sidebar"><ul class="sidebar-menu">
+    <li><a href="#" data-r="/dashboard-company">Painel Principal</a></li>
+    <li><a href="#" data-r="/employees">Colaboradores</a></li></ul></aside><div id="conteudo">${html}</div>`;
+  app.querySelectorAll('[data-r]').forEach(a => a.onclick = e => { e.preventDefault(); ir(a.dataset.r); });
+}
+
+function telaLogin() {
+  app.innerHTML = `<form id="login"><input id="cpf" name="cpf" placeholder="Informe seu CPF">
+    <input id="password" name="password" type="password" placeholder="Informe sua senha">
+    <small class="help is-danger" style="display:none" id="erro">CPF ou senha incorretos</small>
+    <button class="btn btn-primary" id="submit-form-login" type="submit">Entrar</button></form>`;
+  const cpf = document.getElementById('cpf');
+  cpf.oninput = () => cpf.value = mascara(cpf.value);
+  document.getElementById('login').onsubmit = async e => {
+    e.preventDefault();
+    carregando(true); await espera(400); carregando(false);
+    if (cpf.value.replace(/\D/g, '') === CPF_LOGIN && document.getElementById('password').value === SENHA) {
+      localStorage.setItem('logado', '1'); localStorage.removeItem('perfil');
+      ir(new URLSearchParams(location.search).get('redirectTo') || '/dashboard-company');
+    } else document.getElementById('erro').style.display = 'block';
+  };
+}
+
+function telaPainel() {
+  if (localStorage.getItem('perfil') !== 'responsavel') {
+    layout(`<h4>Deseja trocar de perfil? Selecione um abaixo:</h4><div class="row">
+      ${['Colaborador', 'Responsável'].map(p => `<div class="col-md-4"><a href="#" data-p="${p}"><div class="small-box bg-primary">
+      <div class="inner"><h4 class="title-box-reference">${p}</h4><p><b>Empresa: </b>GAP</p></div>
+      <span class="small-box-footer">Acessar</span></div></a></div>`).join('')}</div>`);
+    app.querySelectorAll('[data-p]').forEach(a => a.onclick = e => {
+      e.preventDefault();
+      if (a.dataset.p === 'Responsável') { localStorage.setItem('perfil', 'responsavel'); setTimeout(() => location.reload(), 300); }
+    });
+    return;
+  }
+  layout(`<h3>Painel Principal</h3><a href="#" data-r="/course-in-progress">Acompanhamento</a>
+    <a href="#" data-r="/company-historial">Hist. e Certificados</a>`);
+  app.querySelectorAll('#conteudo [data-r]').forEach(a => a.onclick = e => { e.preventDefault(); ir(a.dataset.r); });
+}
+
+function telaCadastro() {
+  layout(`<div class="box"><h4>Cadastro do Funcionário</h4><form class="form-employee" onsubmit="return false">
+    <label>CPF</label><input name="document" class="form-control"><small class="help is-danger" id="erro-cpf"></small>
+    <label>Nome Completo</label><input name="name" class="form-control" disabled>
+    <small class="help is-danger" id="erro-nome"></small></form>
+    <div class="box-footer"><button class="btn btn-primary btn-lg" disabled id="salvar">Salvar</button></div></div>`);
+  const doc = document.querySelector('[name=document]'), nome = document.querySelector('[name=name]');
+  const salvar = document.getElementById('salvar');
+  let idUsuario = null;
+  const conferir = () => {
+    const okNome = nome.value.trim().split(/\s+/).length >= 2;
+    document.getElementById('erro-nome').textContent = nome.value && !okNome ? 'Informe o nome completo' : '';
+    salvar.disabled = !(cpfValido(doc.value) && (okNome || idUsuario));
+  };
+  doc.oninput = () => { doc.value = mascara(doc.value); conferir(); };
+  nome.oninput = conferir;
+  doc.onblur = async () => {
+    const c = doc.value.replace(/\D/g, '');
+    if (!c) return;
+    if (!cpfValido(c)) { document.getElementById('erro-cpf').textContent = 'O campo cpf não é um CPF válido.'; return; }
+    document.getElementById('erro-cpf').textContent = '';
+    carregando(true); await espera(500); carregando(false);
+    if (COLABORADORES[c] || salvos()[c]) {
+      if (await swal({title: 'Atenção', html: `Já existe um funcionário registrado para o documento ${doc.value}.`,
+                      confirm: 'Quero Editar', cancel: 'Cancelar'})) ir('/employee/edit');
+      doc.value = ''; nome.value = ''; conferir();
+    } else if (ARQUIVADOS[c]) {
+      if (await swal({title: 'Restaurar funcionário?', html: '<p>Já existe um perfil de funcionário registrado para o documento fornecido, porém o mesmo se encontra arquivado.</p>',
+                      confirm: 'Sim, restaurar', cancel: 'Cancelar'})) alert('restaurado!');
+    } else if (AVAPRO[c]) {
+      await swal({title: 'Atenção', html: `<p>O documento ${doc.value} já está cadastrado no Sistema AVAPRO de Ensino.</p><p>Ao continuar você poderá vinculá-lo como funcionário.</p>`, confirm: 'Entendi'});
+      idUsuario = 99; nome.value = AVAPRO[c]; conferir();
+    } else { nome.disabled = false; nome.focus(); }
+  };
+  salvar.onclick = async () => {
+    carregando(true); await espera(600); carregando(false);
+    const s = salvos(); s[doc.value.replace(/\D/g, '')] = nome.value; localStorage.setItem('salvos', JSON.stringify(s));
+    await swal({title: 'Sucesso', html: 'Funcionário cadastrado com sucesso.'});
+    ir('/employees');
+  };
+}
+
+function telaColaboradores() {
+  layout(`<a href="#" class="btn btn-sm btn-primary" data-r2="/employee/create">Cadastrar</a>
+    <ul>${Object.entries(salvos()).map(([c, n]) => `<li>${n} - ${c}</li>`).join('')}</ul>`);
+  app.querySelector('[data-r2]').onclick = e => { e.preventDefault(); ir('/employee/create'); };
+}
+
+function modalFiltro(rotulo, comBotao, aoFiltrar) {
+  const m = document.createElement('div');
+  m.className = 'modal modal-filter';
+  m.innerHTML = `<div class="modal-content"><div class="modal-header"><h4 class="modal-title"><b>Filtro</b></h4></div>
+    <div class="modal-body"><label for="user_name">${rotulo}</label><input id="user_name" class="form-control"></div>
+    <div class="modal-footer"><button class="btn btn-default">Cancelar</button>
+    ${comBotao ? '<button class="btn btn-primary" type="button">Filtrar</button>' : ''}</div></div>`;
+  document.body.appendChild(m);
+  const campo = m.querySelector('#user_name');
+  const fim = () => { const v = campo.value; m.remove(); aoFiltrar(v); };
+  m.querySelector('.btn-default').onclick = () => m.remove();
+  if (comBotao) m.querySelector('.btn-primary').onclick = fim;
+  else campo.onkeyup = e => { if (e.key === 'Enter') fim(); };
+}
+
+async function telaAcompanhamento(filtro = '') {
+  layout(`<div class="box-header"><button class="btn btn-sm bg-aqua box-desktop" id="filtrar">${filtro ? 'Alterar Filtro' : 'Filtrar'}</button></div><div id="tabela"></div>`);
+  document.getElementById('filtrar').onclick = () => modalFiltro('Nome de Aluno / Documento', false, v => telaAcompanhamento(v));
+  carregando(true); await espera(500); carregando(false);
+  const linhas = ACOMPANHAMENTO.filter(l => norm(l.nome).includes(norm(filtro)));
+  let aberta = null;
+  const desenhar = () => {
+    document.getElementById('tabela').innerHTML = `<table class="table"><thead>
+      <tr><th colspan="9"></th><th colspan="2">Controle de Acesso</th></tr>
+      <tr><th></th><th>Selecionar</th><th>Matrícula</th><th>Usuário</th><th>Curso</th><th>Carga Horária</th><th>Status</th><th>Prazo</th><th></th></tr></thead>
+      <tbody>${linhas.length ? linhas.map((l, i) => `<tr><td><button class="btn btn-primary" data-i="${i}"><i class="fas fa-chevron-down"></i></button></td>
+        <td>-</td><td>${1000 + l.id}</td><td><a href="#">${l.nome} <br><small>CPF: 000.000.000-00</small><br><small>Email: Não Informado</small></a></td>
+        <td>${l.curso}</td><td>8h</td><td><span class="badge">${l.status}</span></td><td>01/10/2026 - 30/10/2026</td><td>-</td></tr>
+        ${aberta === i ? `<tr><td colspan="10"><div class="row"><table class="table magic-table"><tr><th>Conclusão</th>
+          <td> ${l.conclusao ? l.conclusao + '%' : '-'} </td></tr><tr><th>Média:</th><td>0,00</td></tr></table></div></td></tr>` : ''}`).join('')
+        : `<tr><td colspan="17">Nenhum histórico encontrado com esse filtro</td></tr>`}</tbody></table>`;
+    document.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { aberta = aberta === +b.dataset.i ? null : +b.dataset.i; desenhar(); });
+  };
+  desenhar();
+}
+
+async function telaHistorico(filtro = '') {
+  layout(`<button class="btn btn-sm bg-aqua box-desktop" id="filtrar">${filtro ? 'Alterar Filtro' : 'Filtrar'}</button><div id="tabela"></div>`);
+  document.getElementById('filtrar').onclick = () => modalFiltro('Aluno', true, v => telaHistorico(v));
+  carregando(true); await espera(500); carregando(false);
+  const linhas = HISTORICO.filter(l => norm(l.nome).includes(norm(filtro)));
+  document.getElementById('tabela').innerHTML = `<table class="table table-bordered table-striped dataTable" id="example1">
+    <thead><tr><th></th><th>Aluno</th><th>Documento</th><th>Curso</th><th>Carga Horária</th><th>Matrícula</th><th>Validade</th><th>Certificado</th></tr></thead>
+    <tbody>${linhas.map((l, i) => `<tr><td><button class="btn btn-warning btn-sm"><i class="fas fa-chevron-down"></i></button></td>
+      <td><a href="#">${l.nome}</a></td><td>CPF: 000.000.000-00</td><td> ${l.curso} </td><td>8h</td><td>${2000 + l.id}</td><td>-</td>
+      <td><button class="btn btn-xs btn-primary btn-block" data-c="${i}"><i class="fas fa-award"></i> Certificado</button></td></tr>`).join('')}</tbody></table>`;
+  document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => escolherCertificado(linhas[+b.dataset.c]));
+}
+
+async function escolherCertificado(l) {
+  const m = document.createElement('div');
+  m.className = 'modal';
+  m.innerHTML = `<div class="modal-content"><div class="modal-header"><h4>Selecione o tipo de certificado</h4></div>
+    <div class="modal-body"><p>Selecione o certificado que deseja gerar: </p></div><div class="modal-footer"></div></div>`;
+  document.body.appendChild(m);
+  const rodape = m.querySelector('.modal-footer');
+  const botoes = comAss => {
+    rodape.innerHTML = `${comAss ? '<button class="btn btn-primary" id="com">Com assinatura</button>' : ''}
+      <button class="btn btn-warning" id="sem">Sem assinatura</button><button class="btn btn-danger" id="cancelar">Cancelar</button>`;
+    m.querySelector('#cancelar').onclick = () => m.remove();
+    m.querySelector('#sem').onclick = () => gerar(false);
+    if (comAss) m.querySelector('#com').onclick = () => gerar(true);
+  };
+  const gerar = async assinatura => {
+    m.style.display = 'none'; carregando(true); await espera(700); carregando(false); m.style.display = '';
+    rodape.innerHTML = `<a class="btn btn-success" href="/api/certificado/${l.id}-${assinatura ? 'com' : 'sem'}.pdf" download target="_blank"><i class="fas fa-download"></i> Download </a>`;
+    rodape.querySelector('a').onclick = () => setTimeout(() => m.remove(), 100);
+  };
+  botoes(false);
+  await espera(1200);  // a assinatura chega depois que a janela abre
+  if (document.body.contains(m) && l.assinatura) botoes(true);
+}
+
+function render() {
+  const rota = location.pathname;
+  if (rota.startsWith('/login') || !logado()) {
+    if (!rota.startsWith('/login')) { history.replaceState({}, '', '/login?redirectTo=' + encodeURIComponent(rota)); }
+    return telaLogin();
+  }
+  if (localStorage.getItem('perfil') !== 'responsavel') return telaPainel();
+  if (rota === '/employee/create') return telaCadastro();
+  if (rota === '/employees') return telaColaboradores();
+  if (rota === '/course-in-progress') return telaAcompanhamento();
+  if (rota === '/company-historial') return telaHistorico();
+  telaPainel();
+}
+render();
+</script>
+</body>
+</html>
