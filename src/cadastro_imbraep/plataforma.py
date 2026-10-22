@@ -72,6 +72,13 @@ return [...document.querySelectorAll('.is-danger, .text-danger, .help-block, .in
     .map(e => e.innerText.replace(/\\s+/g, ' ').trim()).filter(t => t);
 """
 
+# O aviso vermelho do canto da tela (ex.: login recusado), ou "".
+_JS_ALERTA = """
+const vis = e => !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length);
+const a = [...document.querySelectorAll('.alert-danger, .alert-warning')].find(vis);
+return a ? a.innerText.replace(/\\bFechar\\b/g, ' ').replace(/\\s+/g, ' ').trim() : '';
+"""
+
 # A janela (modal do Bootstrap) visível na frente, ou null.
 _JS_MODAL = """
 const vis = e => !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length);
@@ -160,6 +167,12 @@ return [...document.querySelectorAll('.spinner-avapro, .vld-overlay, .loading-ov
 """
 
 
+SITES_EXTRAS = [
+    "*player.vimeo.com*", "*three.min.js*", "*pandavideo*", "*googletagmanager*",
+    "*google-analytics*", "*facebook.net*", "*connect.facebook*", "*video-js*", "*video.js*",
+]
+
+
 class ErroPlataforma(Exception):
     pass
 
@@ -208,7 +221,8 @@ class Plataforma:
     # ---------- navegador ----------
     def __enter__(self):
         self.driver = self._abrir_navegador()
-        self.driver.set_page_load_timeout(90)
+        self.driver.set_page_load_timeout(120)
+        self._bloquear_extras()
         return self
 
     def __exit__(self, *_):
@@ -237,6 +251,16 @@ class Plataforma:
             except WebDriverException as erro:
                 erros.append(f"{nome}: {erro.msg}")
         raise ErroPlataforma("Não consegui abrir o Edge nem o Chrome.\n" + "\n".join(erros))
+
+    def _bloquear_extras(self):
+        """A página de login carrega players de vídeo, 3D e estatísticas de outros
+        sites, que não são usados aqui; numa rede lenta ou com bloqueios eles
+        atrasam o carregamento. O navegador automatizado não os baixa."""
+        try:
+            self.driver.execute_cdp_cmd("Network.enable", {})
+            self.driver.execute_cdp_cmd("Network.setBlockedURLs", {"urls": SITES_EXTRAS})
+        except WebDriverException:
+            pass
 
     def _esperar(self, condicao, tempo: int | None = None, o_que: str | None = None):
         """Espera a condição. Com `o_que`, um tempo esgotado vira um erro claro
@@ -288,6 +312,14 @@ class Plataforma:
             erros = d.execute_script(_JS_ERROS) or []
             if erros:
                 linhas += ["", "Mensagens de erro: " + " | ".join(erros)]
+            linhas += ["", f"Estado da página: {d.execute_script('return document.readyState')}",
+                       "Recursos lentos ou que falharam:"]
+            for nome, duracao, tamanho in d.execute_script(
+                    "return performance.getEntriesByType('resource').filter(r => r.duration > 3000 || !r.transferSize)"
+                    ".map(r => [r.name, Math.round(r.duration), r.transferSize]).slice(0, 40);") or []:
+                linhas.append(f"  {duracao} ms, {tamanho} bytes: {nome[:150]}")
+            texto = (d.execute_script("return document.body ? document.body.innerText : ''") or "").strip()
+            linhas += ["", "Texto da página (início):", texto[:1500] or "(vazia)"]
             base.with_suffix(".txt").write_text("\n".join(linhas), encoding="utf-8")
             return base.with_suffix(".png")
         except Exception:  # o diagnóstico nunca pode esconder o erro original
@@ -334,9 +366,22 @@ class Plataforma:
     def login(self, usuario: str, senha: str) -> None:
         d = self.driver
         self.log("Entrando na plataforma...")
-        d.get(f"{URL_BASE}/login?redirectTo=%2Fdashboard-company")
-        campo_senha = self._esperar(EC.visibility_of_element_located((By.CSS_SELECTOR, "input#password, input[type='password']")),
-                                   o_que="o campo de senha do login")
+        senha_visivel = EC.visibility_of_element_located((By.CSS_SELECTOR, "input#password, input[type='password']"))
+        campo_senha = None
+        for tentativa in range(2):  # a página às vezes demora a montar o formulário: recarrega uma vez
+            try:
+                d.get(f"{URL_BASE}/login?redirectTo=%2Fdashboard-company")
+            except TimeoutException:
+                self.log("A página de login demorou para terminar de carregar; conferindo se o formulário apareceu...")
+            try:
+                campo_senha = self._esperar(senha_visivel, 60)
+                break
+            except TimeoutException:
+                if tentativa == 0:
+                    self.log("O formulário de login não apareceu; recarregando a página...")
+        if campo_senha is None:
+            raise self._erro("Não encontrei o campo de senha do login (a página não carregou o formulário).",
+                             "o campo de senha do login")
         campo_usuario = self._campo_usuario_login()
         if not campo_usuario:
             raise self._erro("Não encontrei o campo de usuário (CPF) do login.", "login")
@@ -366,6 +411,9 @@ class Plataforma:
             swal = drv.execute_script(_JS_SWAL)
             if swal:
                 return ("swal", swal)
+            alerta = drv.execute_script(_JS_ALERTA)  # "Atenção! Os dados fornecidos são inválidos."
+            if alerta:
+                return ("swal", {"titulo": "", "texto": alerta})
             return False
 
         try:
