@@ -1,0 +1,50 @@
+CADASTRO IMBRAEP
+================
+
+Como usar
+1. Abra CadastroImbraep.exe.
+2. Cadastro: na caixa de cima, digite ou cole os colaboradores, um por
+   linha, com CPF e nome completo em qualquer ordem. Exemplos:
+       529.982.247-25 Maria da Silva
+       João Pereira;11144477735
+   Também dá para colar duas colunas do Excel (Nome e CPF).
+3. Clique em "Conferir lista". A coluna Situação mostra problemas como
+   CPF inválido, nome incompleto ou CPF repetido; essas linhas são puladas.
+4. Clique em "Cadastrar na plataforma" e informe o login do responsável
+   (CPF e senha). O app entra com o perfil "Responsável" e cadastra um por
+   um em Colaboradores > Cadastrar. Acompanhe pelo registro embaixo.
+   - "Modo teste" faz tudo, mas não clica em Salvar (não cadastra nada).
+   - "Mostrar navegador" deixa ver o que está acontecendo.
+   - CPF que já é colaborador da empresa é pulado, com o aviso
+     "já cadastrado (pulado)".
+   - CPF arquivado na empresa é pulado com aviso (restaure à mão).
+   - CPF que já tem conta na AVAPRO (de outra empresa) é só vinculado à
+     empresa, com o nome que já está na plataforma.
+   - Treinamentos não são cadastrados nem comprados por aqui.
+
+5. Monitoramento (botão no canto de cima): cole os nomes dos
+   colaboradores, um por linha, e clique em "Buscar progresso". Os nomes
+   podem estar com ou sem acento, em maiúsculas ou minúsculas e com ou sem
+   "da", "de", "dos".
+   - Quem está no Acompanhamento aparece com o curso e a Conclusão (%).
+   - Quem não está lá (já concluiu ou não está cadastrado) é procurado em
+     Histórico e Certificados. Se estiver lá, o certificado é baixado
+     ("Com assinatura" quando existir; senão "Sem assinatura") para a
+     pasta "certificados_Imbraep" na Área de Trabalho (criada se não
+     existir), com o nome "Nome - Curso.pdf". Certificado que já está na
+     pasta não é baixado de novo.
+   - "Copiar resultado" copia a tabela para colar no Excel ou num e-mail.
+   - O monitoramento não altera nada na plataforma.
+
+Se der erro
+- O app salva um print e um resumo da página em dados\erros (pasta ao
+  lado do .exe). Mande o .png e o .txt para ajustar.
+
+Arquivos desta pasta
+- dados\erros\   Prints e resumos de erros.
+- Área de Trabalho\certificados_Imbraep\  Certificados baixados (PDF).
+
+Para usar em outro computador, copie a pasta CadastroImbraep inteira.
+Precisa do Microsoft Edge (já vem no Windows) e de internet.
+O login só é salvo se você marcar "Lembrar", e fica no Cofre de
+Credenciais do Windows daquele computador.
