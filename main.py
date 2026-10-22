@@ -1,0 +1,11 @@
+"""Ponto de entrada: python main.py (ou o executável CadastroImbraep.exe)."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+
+from cadastro_imbraep.gui import main  # noqa: E402
+
+if __name__ == "__main__":
+    main()
