@@ -16,6 +16,7 @@ python -m pytest -q tests || goto :erro
 pyinstaller --noconfirm --clean --windowed ^
     --name CadastroImbraep ^
     --paths src ^
+    --collect-data pdfminer ^
     --collect-all selenium ^
     --collect-submodules keyring ^
     --hidden-import keyring.backends.Windows ^

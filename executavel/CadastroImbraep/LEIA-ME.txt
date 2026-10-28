@@ -8,6 +8,11 @@ Como usar
        529.982.247-25 Maria da Silva
        João Pereira;11144477735
    Também dá para colar duas colunas do Excel (Nome e CPF).
+   Ou clique em "Abrir fichas (PDF)..." e escolha uma ou várias fichas
+   (Ficha de Registro de Empregado do Domínio ou fichas de EPI). O app lê
+   só o CPF e o nome de cada página e coloca na caixa de texto, onde dá
+   para conferir e corrigir. Ficha escaneada (imagem) não tem texto para
+   ler: nesse caso digite o CPF e o nome.
 3. Clique em "Conferir lista". A coluna Situação mostra problemas como
    CPF inválido, nome incompleto ou CPF repetido; essas linhas são puladas.
 4. Clique em "Cadastrar na plataforma" e informe o login do responsável

@@ -3,7 +3,8 @@
 App desktop (Windows) que automatiza, na plataforma de treinamentos
 Inbraep (AVAPRO, https://inbraep.treinamento.online):
 
-- **Cadastro de colaboradores**: cola CPF e nome completo (vários de uma vez),
+- **Cadastro de colaboradores**: cola CPF e nome completo (vários de uma vez)
+  ou abre as fichas em PDF (Registro de Empregado ou EPI), de onde lê CPF e nome;
   o app entra como "Responsável" e cadastra cada um em
   Colaboradores > Cadastrar. CPF já cadastrado é pulado e avisado.
 - **Monitoramento**: cola os nomes; o app lê o Acompanhamento (curso e
