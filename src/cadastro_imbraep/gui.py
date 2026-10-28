@@ -10,7 +10,7 @@ import threading
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from . import __version__, credenciais
 from .config import pasta_certificados
@@ -69,8 +69,8 @@ class App(tk.Tk):
     def _montar_tela(self):
         topo = ttk.Frame(self, padding=8)
         topo.pack(fill="x")
-        ttk.Label(topo, text="Colaboradores: CPF e nome completo, um por linha "
-                             "(pode colar vários de uma vez, do Excel ou de um e-mail).").pack(side="left")
+        ttk.Label(topo, text="Colaboradores: CPF e nome completo, um por linha (pode colar vários de uma vez), "
+                             "ou abra as fichas em PDF.").pack(side="left")
         ttk.Button(topo, text="Monitoramento", command=lambda: JanelaMonitoramento(self)).pack(side="right")
 
         self.txt = tk.Text(self, height=8, wrap="none")
@@ -78,7 +78,8 @@ class App(tk.Tk):
         self.txt.insert("1.0", "")
         botoes = ttk.Frame(self, padding=(8, 6))
         botoes.pack(fill="x")
-        ttk.Button(botoes, text="Conferir lista", command=self.conferir).pack(side="left")
+        ttk.Button(botoes, text="Abrir fichas (PDF)...", command=self.abrir_fichas).pack(side="left")
+        ttk.Button(botoes, text="Conferir lista", command=self.conferir).pack(side="left", padx=6)
         ttk.Button(botoes, text="Limpar", command=self.limpar).pack(side="left", padx=6)
         self.lbl_total = ttk.Label(botoes, text="")
         self.lbl_total.pack(side="left", padx=10)
@@ -118,6 +119,45 @@ class App(tk.Tk):
             messagebox.showinfo("Conferir lista", "Digite ou cole ao menos um CPF e nome.")
             return False
         return True
+
+    def abrir_fichas(self):
+        """Lê CPF e nome das fichas (Registro de Empregado, EPI...) e põe na caixa de texto."""
+        if self.enviando:
+            return
+        caminhos = filedialog.askopenfilenames(title="Escolha as fichas (Registro de Empregado ou EPI)",
+                                               filetypes=[("PDF", "*.pdf")])
+        if not caminhos:
+            return
+        from .ficha import ler_fichas
+
+        lidos, problemas = [], []
+        for caminho in caminhos:
+            try:
+                achados = ler_fichas(caminho)
+            except Exception as erro:  # PDF corrompido, protegido etc.
+                problemas.append(f"{Path(caminho).name}: {erro}")
+                continue
+            if not achados:
+                problemas.append(f"{Path(caminho).name}: não achei CPF nem nome (o PDF pode ser uma imagem escaneada)")
+            lidos += achados
+        existentes = {c.cpf for c in ler_lista(self.txt.get("1.0", "end")) if c.cpf}
+        novos = [c for c in lidos if not c.cpf or c.cpf not in existentes]
+        if novos:
+            atual = self.txt.get("1.0", "end").strip()
+            linhas = [f"{c.cpf_formatado} {c.nome}".strip() for c in novos]
+            self.txt.delete("1.0", "end")
+            self.txt.insert("1.0", "\n".join(([atual] if atual else []) + linhas))
+        for c in lidos:
+            if c.avisos:
+                self.log.escrever(f"{c.origem}: {', '.join(c.avisos)} (confira e corrija na caixa de texto)")
+        for p in problemas:
+            self.log.escrever(f"AVISO: {p}")
+        self.log.escrever(f"Fichas lidas: {len(novos)} colaborador(es) adicionado(s)"
+                          + (f", {len(lidos) - len(novos)} já estavam na lista." if len(lidos) > len(novos) else "."))
+        if novos:
+            self.conferir()
+        elif problemas:
+            messagebox.showwarning("Abrir fichas", "\n".join(problemas))
 
     def limpar(self):
         if self.enviando:

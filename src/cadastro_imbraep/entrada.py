@@ -19,6 +19,7 @@ class Colaborador:
     nome: str
     cpf: str  # só números
     avisos: list[str] = field(default_factory=list)
+    origem: str = ""  # arquivo e página, quando veio de uma ficha em PDF
 
     @property
     def cpf_formatado(self) -> str:
