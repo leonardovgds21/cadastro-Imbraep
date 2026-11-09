@@ -344,7 +344,8 @@ class App(tk.Tk):
                                 "São muitos destinatários para caber no link. Os e-mails foram copiados:\n"
                                 "cole no campo Para (ou Cco) do e-mail que abriu.\n\n"
                                 "Clique OK depois de colar para copiar o texto da mensagem.")
-        if email_html.copiar_html(email_html.montar_html(cursos, data, email_html.logo_data_uri()), texto):
+        if email_html.copiar_html(email_html.montar_html(cursos, data, email_html.logo_data_uri()), texto,
+                                  int(self.wm_frame(), 16)):
             messagebox.showinfo("E-mail aos colaboradores",
                                 "O texto do e-mail (já formatado) foi copiado.\n\n"
                                 "Clique no corpo do e-mail que abriu e cole com Ctrl+V.")
