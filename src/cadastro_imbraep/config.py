@@ -15,12 +15,32 @@ from pathlib import Path
 # IMBRAEP_URL troca o endereço (usado nos testes com o site simulado).
 URL_BASE = os.environ.get("IMBRAEP_URL", "https://inbraep.treinamento.online").rstrip("/")
 NOME_PASTA_CERTIFICADOS = "certificados_Imbraep"
+URL_LOGIN = "https://inbraep.treinamento.online/login"
+DOMINIO_EMAIL = "gapgestao.com.br"
+EMPRESA = "GAP GESTÃO AMBIENTAL E PROJETOS LTDA."
+TREINAMENTOS = [
+    "NR-12 Ferramentas Manuais",
+    "NR35 Trab em Altura - Supervisor",
+    "NR-33 Supervisor de Entrada",
+    "NR35 Trab em Altura - Trabalhador",
+    "Rec NR35 Trabalhador",
+    "Reciclagem NR-33 Supervisor de Entrada",
+    "NR-18 - Operador de PEMT",
+    "NR 35 Trabalho em Altura - Trabalhador 8 horas",
+    "Rec. NR-18 - Operador de PEMT",
+]
 
 
 def pasta_base() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parents[2]
+
+
+def recurso(caminho: str) -> Path:
+    """Arquivo que vai junto no executável (ex.: assets/logo_gap.png)."""
+    base = Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "frozen", False) else pasta_base()
+    return base / caminho
 
 
 def pasta_dados() -> Path:

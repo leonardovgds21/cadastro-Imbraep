@@ -27,7 +27,21 @@ Como usar
      empresa, com o nome que já está na plataforma.
    - Treinamentos não são cadastrados nem comprados por aqui.
 
-5. Monitoramento (botão no canto de cima): cole os nomes dos
+5. E-mail aos colaboradores: clique em "Enviar e-mail aos colaboradores"
+   (depois de cadastrar, ou a qualquer momento com a lista conferida).
+   - Marque um ou mais treinamentos na lista, ou digite um curso que não
+     esteja nela no campo "Outro curso".
+   - Confira os e-mails (regra nome.sobrenome@gapgestao.com.br, a mesma
+     do FormaSeg) e corrija se precisar.
+   - Clique em "Abrir e-mail". No Outlook clássico, o rascunho abre já
+     formatado no padrão da GAP. No Outlook novo, o e-mail abre com os
+     destinatários e o assunto, e o texto formatado fica copiado: clique
+     no corpo e cole com Ctrl+V. A Data de Início é a data do dia.
+   - Quem teve erro no cadastro fica de fora. Confira e clique em Enviar.
+   - Para a logo aparecer, coloque o arquivo logo_gap.png na pasta assets
+     do projeto antes de gerar o executável.
+
+6. Monitoramento (botão no canto de cima): cole os nomes dos
    colaboradores, um por linha, e clique em "Buscar progresso". Os nomes
    podem estar com ou sem acento, em maiúsculas ou minúsculas e com ou sem
    "da", "de", "dos".
