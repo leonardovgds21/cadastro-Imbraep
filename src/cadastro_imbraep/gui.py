@@ -12,8 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import __version__, credenciais
-from .config import pasta_certificados
+from . import __version__, credenciais, email_alunos, email_html
+from .config import TREINAMENTOS, pasta_certificados, pasta_dados
 from .entrada import Colaborador, ler_lista
 from .nomes import nome_certificado, nomes_colados, normalizar
 
@@ -58,6 +58,7 @@ class App(tk.Tk):
         self.geometry("1000x680")
         self.minsize(860, 560)
         self.colaboradores: list[Colaborador] = []
+        self.situacoes: dict[int, str] = {}
         self.fila: queue.Queue = queue.Queue()
         self.enviando = False
         self.modo_teste = tk.BooleanVar(value=False)
@@ -102,6 +103,7 @@ class App(tk.Tk):
         ttk.Checkbutton(rodape, text="Mostrar navegador", variable=self.mostrar_navegador).pack(side="right", padx=8)
         ttk.Checkbutton(rodape, text="Modo teste (não salva)", variable=self.modo_teste).pack(side="right", padx=8)
         ttk.Button(rodape, text="Esquecer login salvo", command=self.esquecer_login).pack(side="left")
+        ttk.Button(rodape, text="Enviar e-mail aos colaboradores", command=self.enviar_email).pack(side="left", padx=8)
 
         self.log = Registro(self, height=7)
         self.log.pack(fill="x", padx=8, pady=(0, 8))
@@ -109,6 +111,7 @@ class App(tk.Tk):
     # ---------- lista ----------
     def conferir(self) -> bool:
         self.colaboradores = ler_lista(self.txt.get("1.0", "end"))
+        self.situacoes: dict[int, str] = {}
         self.tabela.delete(*self.tabela.get_children())
         for i, c in enumerate(self.colaboradores):
             self.tabela.insert("", "end", iid=str(i), values=(c.nome, c.cpf_formatado, "; ".join(c.avisos)),
@@ -168,6 +171,7 @@ class App(tk.Tk):
         self.lbl_total.config(text="")
 
     def _situacao(self, i: int, texto: str, tag: str = ""):
+        self.situacoes[i] = tag
         c = self.colaboradores[i]
         self.tabela.item(str(i), values=(c.nome, c.cpf_formatado, texto), tags=(tag,) if tag else ())
         self.tabela.see(str(i))
@@ -258,9 +262,126 @@ class App(tk.Tk):
             pass
         self.after(200, self._processar_fila)
 
+    # ---------- e-mail aos colaboradores ----------
+    def enviar_email(self):
+        """Escolhe os treinamentos e abre o e-mail no Outlook para os colaboradores da lista."""
+        if self.enviando:
+            return
+        if not self.colaboradores and not self.conferir():
+            return
+        nomes = [c.nome for i, c in enumerate(self.colaboradores)
+                 if not c.avisos and self.situacoes.get(i) != "erro"]
+        if not nomes:
+            messagebox.showinfo("E-mail aos colaboradores", "Nenhum colaborador válido na lista.")
+            return
+        dialogo = DialogoEmail(self, nomes, email_alunos.enderecos(nomes))
+        if not dialogo.resultado:
+            return
+        cursos, enderecos = dialogo.resultado
+        data = datetime.now().strftime("%d/%m/%Y")
+        texto = email_alunos.corpo(cursos, data)
+        texto_dest = "; ".join(enderecos)
+        try:  # cópia do e-mail em dados/, para conferir no navegador se precisar
+            (pasta_dados() / "email_colaboradores.html").write_text(
+                email_html.montar_html(cursos, data, email_html.logo_data_uri()), encoding="utf-8")
+        except OSError:
+            pass
+        if email_html.abrir_no_outlook(enderecos, email_alunos.ASSUNTO, cursos, data):
+            self.log.escrever(f"E-mail formatado aberto no Outlook ({', '.join(cursos)}) para: {texto_dest}. "
+                              "Confira e clique em Enviar.")
+            return
+        # Outlook novo (sem automação): o link abre o e-mail com destinatários e assunto, e o texto
+        # formatado vai para a área de transferência
+        link, com_dest = email_alunos.preparar_link(enderecos, email_alunos.ASSUNTO)
+        try:
+            if sys.platform == "win32":
+                os.startfile(link)  # noqa: S606
+            else:
+                subprocess.Popen(["xdg-open", link])
+        except OSError as erro:
+            self._copiar(texto_dest)
+            messagebox.showerror(
+                "E-mail aos colaboradores",
+                f"Não consegui abrir o app de e-mail ({erro}).\n\n"
+                "Os e-mails foram copiados: cole no campo Para de um e-mail novo.\n\n"
+                "Dica: no Windows, em Configurações > Aplicativos > Aplicativos padrão, "
+                "escolha o Outlook (novo) para o tipo de link MAILTO.")
+            return
+        self.log.escrever(f"E-mail aberto ({', '.join(cursos)}) para: {texto_dest}")
+        if not com_dest:
+            self._copiar(texto_dest)
+            messagebox.showinfo("E-mail aos colaboradores",
+                                "São muitos destinatários para caber no link. Os e-mails foram copiados:\n"
+                                "cole no campo Para (ou Cco) do e-mail que abriu.\n\n"
+                                "Clique OK depois de colar para copiar o texto da mensagem.")
+        if email_html.copiar_html(email_html.montar_html(cursos, data, email_html.logo_data_uri()), texto):
+            messagebox.showinfo("E-mail aos colaboradores",
+                                "O texto do e-mail (já formatado) foi copiado.\n\n"
+                                "Clique no corpo do e-mail que abriu e cole com Ctrl+V.")
+        else:
+            self._copiar(texto)
+            messagebox.showinfo("E-mail aos colaboradores",
+                                "O texto do e-mail foi copiado: cole no corpo do e-mail (Ctrl+V).")
+
+    def _copiar(self, texto: str):
+        self.clipboard_clear()
+        self.clipboard_append(texto)
+        self.update()
+
     def esquecer_login(self):
         credenciais.apagar()
         self.log.escrever("Login salvo apagado deste computador.")
+
+
+class DialogoEmail(tk.Toplevel):
+    """Escolhe os treinamentos (lista ou digitado) e confere os e-mails dos colaboradores."""
+
+    def __init__(self, pai, nomes: list[str], enderecos: list[str]):
+        super().__init__(pai)
+        self.title("E-mail aos colaboradores")
+        self.transient(pai)
+        self.resultado = None
+        quadro = ttk.Frame(self, padding=12)
+        quadro.pack(fill="both", expand=True)
+
+        ttk.Label(quadro, text="Treinamentos (clique para marcar um ou mais):").pack(anchor="w")
+        self.lista = tk.Listbox(quadro, selectmode="multiple", height=len(TREINAMENTOS), width=60,
+                                exportselection=False)
+        for t in TREINAMENTOS:
+            self.lista.insert("end", t)
+        self.lista.pack(fill="x", pady=(2, 8))
+        ttk.Label(quadro, text="Outro curso (digite, se não estiver na lista; um por linha):").pack(anchor="w")
+        self.outro = tk.Text(quadro, height=2, width=60)
+        self.outro.pack(fill="x", pady=(2, 8))
+
+        ttk.Label(quadro, text=f"Para ({len(nomes)} colaborador(es), regra nome.sobrenome; corrija se precisar):"
+                  ).pack(anchor="w")
+        self.para = tk.Text(quadro, height=min(max(len(nomes), 3), 10), width=60)
+        self.para.insert("1.0", "\n".join(e for e in enderecos if e))
+        self.para.pack(fill="both", expand=True, pady=(2, 8))
+
+        botoes = ttk.Frame(quadro)
+        botoes.pack(fill="x")
+        ttk.Button(botoes, text="Cancelar", command=self.destroy).pack(side="right")
+        ttk.Button(botoes, text="Abrir e-mail", command=self._ok).pack(side="right", padx=6)
+        self.grab_set()
+        pai.wait_window(self)
+
+    def _ok(self):
+        cursos = [TREINAMENTOS[i] for i in self.lista.curselection()]
+        cursos += [l.strip() for l in self.outro.get("1.0", "end").splitlines() if l.strip()]
+        enderecos = [e.strip() for e in self.para.get("1.0", "end").replace(";", "\n").splitlines() if e.strip()]
+        invalidos = [e for e in enderecos if not email_alunos.email_valido(e)]
+        if not cursos:
+            messagebox.showinfo("E-mail aos colaboradores", "Marque ou digite ao menos um treinamento.", parent=self)
+            return
+        if not enderecos or invalidos:
+            messagebox.showerror("E-mail aos colaboradores",
+                                 "Confira os e-mails: " + (", ".join(invalidos) if invalidos else "nenhum informado"),
+                                 parent=self)
+            return
+        self.resultado = (cursos, list(dict.fromkeys(enderecos)))
+        self.destroy()
 
 
 class DialogoLogin(tk.Toplevel):

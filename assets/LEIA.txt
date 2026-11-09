@@ -1,0 +1,2 @@
+Coloque aqui a logo da GAP com o nome logo_gap.png para ela aparecer no topo do e-mail.
+Sem o arquivo, o e-mail mostra "GAP" em texto nas cores da marca.
