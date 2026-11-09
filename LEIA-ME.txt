@@ -13,6 +13,10 @@ Como usar
    só o CPF e o nome de cada página e coloca na caixa de texto, onde dá
    para conferir e corrigir. Ficha escaneada (imagem) não tem texto para
    ler: nesse caso digite o CPF e o nome.
+   Botão "Digitar dados...": para a ficha que o app não conseguiu ler
+   (por exemplo, PDF mal formatado depois da assinatura). Digite o nome
+   completo e o CPF e clique em OK. Com uma linha da lista selecionada
+   (ou com dois cliques nela), o botão corrige os dados dessa linha.
 3. Clique em "Conferir lista". A coluna Situação mostra problemas como
    CPF inválido, nome incompleto ou CPF repetido; essas linhas são puladas.
 4. Clique em "Cadastrar na plataforma" e informe o login do responsável
