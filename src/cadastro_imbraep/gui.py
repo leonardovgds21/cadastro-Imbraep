@@ -14,7 +14,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import __version__, credenciais, email_alunos, email_html
 from .config import TREINAMENTOS, pasta_certificados, pasta_dados
-from .entrada import Colaborador, ler_lista
+from .entrada import Colaborador, ler_lista, so_numeros, validar
 from .nomes import nome_certificado, nomes_colados, normalizar
 
 SITUACOES = {
@@ -80,6 +80,7 @@ class App(tk.Tk):
         botoes = ttk.Frame(self, padding=(8, 6))
         botoes.pack(fill="x")
         ttk.Button(botoes, text="Abrir fichas (PDF)...", command=self.abrir_fichas).pack(side="left")
+        ttk.Button(botoes, text="Digitar dados...", command=self.digitar_dados).pack(side="left", padx=(6, 0))
         ttk.Button(botoes, text="Conferir lista", command=self.conferir).pack(side="left", padx=6)
         ttk.Button(botoes, text="Limpar", command=self.limpar).pack(side="left", padx=6)
         self.lbl_total = ttk.Label(botoes, text="")
@@ -95,6 +96,7 @@ class App(tk.Tk):
         self.tabela.tag_configure("aviso", foreground="#b45309")
         self.tabela.tag_configure("erro", foreground="#b91c1c")
         self.tabela.pack(fill="both", expand=True, padx=8)
+        self.tabela.bind("<Double-1>", lambda _: self.digitar_dados())
 
         rodape = ttk.Frame(self, padding=8)
         rodape.pack(fill="x")
@@ -161,6 +163,34 @@ class App(tk.Tk):
             self.conferir()
         elif problemas:
             messagebox.showwarning("Abrir fichas", "\n".join(problemas))
+
+    def digitar_dados(self):
+        """CPF e nome digitados à mão: para a ficha que não deu para ler (ex.: PDF mal
+        formatado depois da assinatura). Com uma linha selecionada, corrige essa linha."""
+        if self.enviando:
+            return
+        if self.txt.get("1.0", "end").strip() and not self.colaboradores:
+            self.conferir()
+        selecao = self.tabela.selection()
+        indice = int(selecao[0]) if selecao and int(selecao[0]) < len(self.colaboradores) else None
+        atual = self.colaboradores[indice] if indice is not None else None
+        dialogo = DialogoDados(self, atual)
+        if not dialogo.resultado:
+            return
+        nome, cpf = dialogo.resultado
+        novo = Colaborador(nome=nome, cpf=cpf)
+        lista = list(self.colaboradores)
+        if indice is None:
+            lista.append(novo)
+        else:
+            lista[indice] = novo
+        self.txt.delete("1.0", "end")
+        self.txt.insert("1.0", "\n".join(f"{c.cpf_formatado} {c.nome}".strip() for c in lista))
+        self.conferir()
+        posicao = len(lista) - 1 if indice is None else indice
+        self.tabela.selection_set(str(posicao))
+        self.tabela.see(str(posicao))
+        self.log.escrever(f"{'Corrigido' if atual else 'Adicionado'} à mão: {nome} ({novo.cpf_formatado})")
 
     def limpar(self):
         if self.enviando:
@@ -331,6 +361,46 @@ class App(tk.Tk):
     def esquecer_login(self):
         credenciais.apagar()
         self.log.escrever("Login salvo apagado deste computador.")
+
+
+class DialogoDados(tk.Toplevel):
+    """Digita CPF e nome completo de um colaborador (os mesmos dados lidos da ficha)."""
+
+    def __init__(self, pai, atual: Colaborador | None):
+        super().__init__(pai)
+        self.title("Corrigir dados do colaborador" if atual else "Digitar dados do colaborador")
+        self.resizable(False, False)
+        self.transient(pai)
+        self.resultado = None
+        self.nome = tk.StringVar(value=atual.nome if atual else "")
+        self.cpf = tk.StringVar(value=atual.cpf_formatado if atual else "")
+
+        quadro = ttk.Frame(self, padding=12)
+        quadro.pack()
+        ttk.Label(quadro, text="Nome completo").grid(row=0, column=0, sticky="w")
+        entrada = ttk.Entry(quadro, textvariable=self.nome, width=44)
+        entrada.grid(row=1, column=0, pady=(0, 8))
+        ttk.Label(quadro, text="CPF").grid(row=2, column=0, sticky="w")
+        ttk.Entry(quadro, textvariable=self.cpf, width=44).grid(row=3, column=0, pady=(0, 8))
+        self.lbl_erro = ttk.Label(quadro, text="", foreground="#b91c1c")
+        self.lbl_erro.grid(row=4, column=0, sticky="w")
+        botoes = ttk.Frame(quadro)
+        botoes.grid(row=5, column=0, pady=(10, 0), sticky="e")
+        ttk.Button(botoes, text="Cancelar", command=self.destroy).pack(side="right")
+        ttk.Button(botoes, text="OK", command=self._ok).pack(side="right", padx=6)
+        self.bind("<Return>", lambda _: self._ok())
+        entrada.focus_set()
+        self.grab_set()
+        pai.wait_window(self)
+
+    def _ok(self):
+        c = Colaborador(nome=" ".join(self.nome.get().split()), cpf=so_numeros(self.cpf.get()))
+        problemas = validar(c)
+        if problemas:
+            self.lbl_erro.config(text="Confira: " + ", ".join(problemas))
+            return
+        self.resultado = (c.nome, c.cpf)
+        self.destroy()
 
 
 class DialogoEmail(tk.Toplevel):
